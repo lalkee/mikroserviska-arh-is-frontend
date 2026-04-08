@@ -20,6 +20,6 @@ export interface Event {
   dateTime: string;
   duration: string;
   registrationFee: number;
-  location: Location;
+  location?: Location;
   speakers: Speaker[];
 }

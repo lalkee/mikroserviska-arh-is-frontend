@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Outlet, useLocation } from 'react-router-dom';
+import { Client } from '@stomp/stompjs';
 import type { Event, Speaker, Location as AppLocation } from '../types/index';
-import { eventService } from '../services/api';
-import Modal from '../components/Modal'; // Adjust path
+import Modal from '../components/Modal';
+import EventCard from '../components/cards/EventCard';
 import SpeakerCard from '../components/cards/SpeakerCard';
 import LocationCard from '../components/cards/LocationCard';
-import EventCard from '../components/cards/EventCard';
 
 const EventsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -17,20 +17,26 @@ const EventsPage: React.FC = () => {
   const [selectedSpeaker, setSelectedSpeaker] = useState<Speaker | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<AppLocation | null>(null);
 
-  const fetchData = async () => {
-    try {
-      const eventsRes = await eventService.getAll();
-      setEvents(eventsRes.data);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchData();
+    const client = new Client({
+      brokerURL: 'ws://localhost:15674/ws',
+      connectHeaders: { login: 'guest', passcode: 'guest' },
+      onConnect: () => {
+        // Subscribe to the response queue
+        client.subscribe('/queue/event.get.all.res', (message) => {
+          setEvents(JSON.parse(message.body));
+          setLoading(false);
+        });
+
+        // Request all events
+        client.publish({ destination: '/queue/event.get.all', body: JSON.stringify({}) });
+      },
+    });
+
+    client.activate();
+    return () => { client.deactivate(); };
   }, [locationPath.pathname]);
+
 
   return (
     <div>
@@ -50,7 +56,7 @@ const EventsPage: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 gap-8">
           {events.map((event) => (
-            <EventCard 
+            <EventCard
               key={event.id}
               event={event}
               onEdit={(id) => navigate(`/events/edit/${id}`)}
@@ -61,17 +67,17 @@ const EventsPage: React.FC = () => {
         </div>
       )}
 
-      <Modal 
-        isOpen={!!selectedSpeaker} 
-        onClose={() => setSelectedSpeaker(null)} 
+      <Modal
+        isOpen={!!selectedSpeaker}
+        onClose={() => setSelectedSpeaker(null)}
         title="Speaker Details"
       >
         {selectedSpeaker && <SpeakerCard speaker={selectedSpeaker} />}
       </Modal>
 
-      <Modal 
-        isOpen={!!selectedLocation} 
-        onClose={() => setSelectedLocation(null)} 
+      <Modal
+        isOpen={!!selectedLocation}
+        onClose={() => setSelectedLocation(null)}
         title="Location Details"
       >
         {selectedLocation && <LocationCard location={selectedLocation} />}

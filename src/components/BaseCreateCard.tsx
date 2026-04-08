@@ -38,14 +38,20 @@ function BaseCreateCard<T>({
         if (onInitialize) await onInitialize();
         if (isEditMode && id && onFetch) {
           const result = await onFetch(Number(id));
-          setData(result);
+          if (result) {
+            setData(result);
+          } else {
+            setData(initialData); 
+          }
+        } else if (!isEditMode) {
+          setData(initialData);
         }
       } catch (err) {
         console.error(`Error initializing ${entityName}:`, err);
       }
     };
     init();
-  }, [id, isEditMode, onFetch, onInitialize, entityName]);
+  }, [id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

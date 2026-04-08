@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Outlet, useLocation } from 'react-router-dom';
+import { Client } from '@stomp/stompjs'; // Added
 import type { Location } from '../types/index';
-import { locationService } from '../services/api';
 import LocationCard from '../components/cards/LocationCard';
 
 const LocationsPage: React.FC = () => {
@@ -10,19 +10,22 @@ const LocationsPage: React.FC = () => {
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchLocations = async () => {
-    try {
-      const response = await locationService.getAll();
-      setLocations(response.data);
-    } catch (error) {
-      console.error('Error:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchLocations();
+    const client = new Client({
+      brokerURL: 'ws://localhost:15674/ws',
+      connectHeaders: { login: 'guest', passcode: 'guest' },
+      onConnect: () => {
+        client.subscribe('/queue/location.get.all.res', (message) => {
+          setLocations(JSON.parse(message.body));
+          setLoading(false);
+        });
+
+        client.publish({ destination: '/queue/location.get.all', body: JSON.stringify({}) });
+      },
+    });
+
+    client.activate();
+    return () => { client.deactivate(); };
   }, [locationPath.pathname]);
 
   return (
