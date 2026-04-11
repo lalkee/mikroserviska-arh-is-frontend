@@ -1,81 +1,75 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Client } from '@stomp/stompjs';
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import type { Event, Location, Speaker } from '../types/index';
-import BaseCreateCard from './BaseCreateCard';
+import Modal from './Modal';
+import { eventService } from '../services/eventService';
+import { locationService } from '../services/locationService';
+import { speakerService } from '../services/speakerService';
 
 const CreateEventCard: React.FC = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const isEditMode = Boolean(id);
+
+  const [formData, setFormData] = useState<Partial<Event>>({
+    name: '',
+    agenda: '',
+    dateTime: '',
+    duration: '',
+    registrationFee: 0,
+    location: undefined,
+    speakers: [],
+  });
+  
   const [locations, setLocations] = useState<Location[]>([]);
   const [speakers, setSpeakers] = useState<Speaker[]>([]);
-  const stompRef = useRef<Client | null>(null);
-  const isConnected = useRef(false);
-  const pending = useRef<(() => void)[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const client = new Client({
-      brokerURL: 'ws://localhost:15674/ws',
-      connectHeaders: { login: 'guest', passcode: 'guest' },
+    eventService.activate(() => {
+      locationService.fetchAll((locs) => setLocations(locs));
+      speakerService.fetchAll((spks) => setSpeakers(spks));
 
-      onConnect: () => {
-        isConnected.current = true;
-        pending.current.forEach(fn => fn());
-        pending.current = [];
-      },
-
-      onStompError: () => {
-        isConnected.current = false;
-      },
-
-      onWebSocketClose: () => {
-        isConnected.current = false;
-      },
-    });
-
-    client.activate();
-    stompRef.current = client;
-
-    return () => {
-      client.deactivate();
-    };
-  }, []);
-
-  const mqRequest = (destination: string, responseQueue: string, body: any) => {
-    return new Promise<any>((resolve, reject) => {
-      const exec = () => {
-        if (!stompRef.current) return;
-
-        const subscription = stompRef.current.subscribe(responseQueue, (msg) => {
-          subscription.unsubscribe();
-          try {
-            resolve(JSON.parse(msg.body));
-          } catch (e) {
-            reject(e);
+      if (isEditMode && id) {
+        eventService.fetchById(Number(id), (data: Event) => {
+          if (data.dateTime) {
+            data.dateTime = data.dateTime.slice(0, 16);
           }
+          setFormData(data);
+          setLoading(false);
         });
-
-        stompRef.current.publish({
-          destination,
-          body: JSON.stringify(body),
-        });
-      };
-
-      if (isConnected.current && stompRef.current?.connected) {
-        exec();
       } else {
-        pending.current.push(exec);
+        setLoading(false);
       }
     });
+
+    return () => {
+      eventService.deactivate();
+    };
+  }, [id, isEditMode]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!eventService.isConnected) return;
+
+    const payload = isEditMode ? { ...formData, id: Number(id) } : formData;
+    eventService.save(payload as Event);
+    navigate('/events');
   };
 
-  const toggleSpeaker = (
-    newEvent: Partial<Event>,
-    setNewEvent: React.Dispatch<React.SetStateAction<Partial<Event>>>,
-    speaker: Speaker
-  ) => {
-    const current = newEvent.speakers || [];
+  const handleDelete = () => {
+    if (window.confirm('Are you sure?') && eventService.isConnected) {
+      eventService.deleteEvent(Number(id));
+      navigate('/events');
+    }
+  };
+
+  const toggleSpeaker = (speaker: Speaker) => {
+    const current = formData.speakers || [];
     const exists = current.find(s => s.id === speaker.id);
 
-    setNewEvent({
-      ...newEvent,
+    setFormData({
+      ...formData,
       speakers: exists
         ? current.filter(s => s.id !== speaker.id)
         : [...current, speaker],
@@ -83,199 +77,90 @@ const CreateEventCard: React.FC = () => {
   };
 
   return (
-    <BaseCreateCard<Partial<Event>>
-      title={{ create: "Create Event", edit: "Edit Event" }}
-      entityName="Event"
-      initialData={{
-        name: '',
-        agenda: '',
-        dateTime: '',
-        duration: '',
-        registrationFee: 0,
-        location: undefined,
-        speakers: [],
-      }}
-      redirectPath="/events"
-
-      onInitialize={async () => {
-        const locs = await mqRequest(
-          '/queue/location.get.all',
-          '/queue/location.get.all.res',
-          {}
-        );
-
-        const spks = await mqRequest(
-          '/queue/speaker.get.all',
-          '/queue/speaker.get.all.res',
-          {}
-        );
-
-        setLocations(locs);
-        setSpeakers(spks);
-      }}
-
-      onFetch={async (id) => {
-        const eventData = await mqRequest(
-          '/queue/event.get.id',
-          '/queue/event.get.id.res',
-          id
-        );
-
-        if (eventData.dateTime) {
-          eventData.dateTime = eventData.dateTime.slice(0, 16);
-        }
-
-        return eventData;
-      }}
-
-      onSave={async (id, data) => {
-        const payload = id ? { ...data, id } : data;
-
-        stompRef.current?.publish({
-          destination: '/queue/event.save',
-          body: JSON.stringify(payload),
-        });
-      }}
-
-      onDelete={async (id) => {
-        stompRef.current?.publish({
-          destination: '/queue/event.delete',
-          body: JSON.stringify(id),
-        });
-      }}
-
-      submitButtonText={{ create: "Publish Event", edit: "Update Event" }}
+    <Modal 
+      isOpen 
+      onClose={() => navigate('/events')} 
+      title={isEditMode ? "Edit Event" : "Create Event"}
     >
-      {(newEvent, setNewEvent) => (
-        <>
+      {loading ? (
+        <div className="text-center py-10 text-neutral-400">Loading...</div>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-xs font-bold uppercase text-neutral-500 mb-2 tracking-widest">
-              Event Name
-            </label>
-            <input
-              type="text"
-              required
-              className="input-field py-3 px-4"
-              value={newEvent.name}
-              onChange={(e) =>
-                setNewEvent({ ...newEvent, name: e.target.value })
-              }
+            <label className="block text-xs font-bold uppercase text-neutral-500 mb-2 tracking-widest">Event Name</label>
+            <input 
+              type="text" required className="input-field py-3 px-4" 
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             />
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase text-neutral-500 mb-2 tracking-widest">
-              Agenda
-            </label>
-            <textarea
-              required
-              className="input-field min-h-25 py-3 px-4"
-              value={newEvent.agenda}
-              onChange={(e) =>
-                setNewEvent({ ...newEvent, agenda: e.target.value })
-              }
+            <label className="block text-xs font-bold uppercase text-neutral-500 mb-2 tracking-widest">Agenda</label>
+            <textarea 
+              required className="input-field min-h-25 py-3 px-4" 
+              value={formData.agenda}
+              onChange={(e) => setFormData({ ...formData, agenda: e.target.value })}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-6">
             <div>
-              <label className="block text-xs font-bold uppercase text-neutral-500 mb-2 tracking-widest">
-                Date
-              </label>
-              <input
-                type="datetime-local"
-                required
-                className="input-field py-3 px-4"
-                value={newEvent.dateTime}
-                onChange={(e) =>
-                  setNewEvent({ ...newEvent, dateTime: e.target.value })
-                }
+              <label className="block text-xs font-bold uppercase text-neutral-500 mb-2 tracking-widest">Date</label>
+              <input 
+                type="datetime-local" required className="input-field py-3 px-4" 
+                value={formData.dateTime}
+                onChange={(e) => setFormData({ ...formData, dateTime: e.target.value })}
               />
             </div>
-
             <div>
-              <label className="block text-xs font-bold uppercase text-neutral-500 mb-2 tracking-widest">
-                Duration
-              </label>
-              <input
-                type="text"
-                required
-                className="input-field py-3 px-4"
-                value={newEvent.duration}
-                onChange={(e) =>
-                  setNewEvent({ ...newEvent, duration: e.target.value })
-                }
+              <label className="block text-xs font-bold uppercase text-neutral-500 mb-2 tracking-widest">Duration</label>
+              <input 
+                type="text" required className="input-field py-3 px-4" 
+                value={formData.duration}
+                onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-6">
             <div>
-              <label className="block text-xs font-bold uppercase text-neutral-500 mb-2 tracking-widest">
-                Fee
-              </label>
-              <input
-                type="number"
-                required
-                className="input-field py-3 px-4"
-                value={newEvent.registrationFee}
-                onChange={(e) =>
-                  setNewEvent({
-                    ...newEvent,
-                    registrationFee: parseFloat(e.target.value),
-                  })
-                }
+              <label className="block text-xs font-bold uppercase text-neutral-500 mb-2 tracking-widest">Fee</label>
+              <input 
+                type="number" required className="input-field py-3 px-4" 
+                value={formData.registrationFee}
+                onChange={(e) => setFormData({ ...formData, registrationFee: parseFloat(e.target.value) })}
               />
             </div>
-
             <div>
-              <label className="block text-xs font-bold uppercase text-neutral-500 mb-2 tracking-widest">
-                Location
-              </label>
-              <select
-                required
-                className="input-field py-3 px-4"
-                value={newEvent.location?.id || ''}
-                onChange={(e) =>
-                  setNewEvent({
-                    ...newEvent,
-                    location: locations.find(
-                      l => l.id === parseInt(e.target.value)
-                    ),
-                  })
-                }
+              <label className="block text-xs font-bold uppercase text-neutral-500 mb-2 tracking-widest">Location</label>
+              <select 
+                required className="input-field py-3 px-4"
+                value={formData.location?.id || ''}
+                onChange={(e) => setFormData({
+                  ...formData,
+                  location: locations.find(l => l.id === parseInt(e.target.value))
+                })}
               >
                 <option value="">Select Location</option>
                 {locations.map(l => (
-                  <option key={l.id} value={l.id}>
-                    {l.name}
-                  </option>
+                  <option key={l.id} value={l.id}>{l.name}</option>
                 ))}
               </select>
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase text-neutral-500 mb-3 tracking-widest">
-              Speakers
-            </label>
+            <label className="block text-xs font-bold uppercase text-neutral-500 mb-3 tracking-widest">Speakers</label>
             <div className="flex flex-wrap gap-3">
               {speakers.map(s => {
-                const isSelected = newEvent.speakers?.some(
-                  sel => sel.id === s.id
-                );
-
+                const isSelected = formData.speakers?.some(sel => sel.id === s.id);
                 return (
                   <button
-                    key={s.id}
-                    type="button"
-                    onClick={() =>
-                      toggleSpeaker(newEvent, setNewEvent, s)
-                    }
+                    key={s.id} type="button"
+                    onClick={() => toggleSpeaker(s)}
                     className={`px-4 py-2 rounded-full text-sm font-medium border transition-all ${
-                      isSelected
-                        ? 'bg-black text-white border-black'
-                        : 'bg-white text-neutral-500 border-[#eaeaea]'
+                      isSelected ? 'bg-black text-white border-black' : 'bg-white text-neutral-500 border-[#eaeaea]'
                     }`}
                   >
                     {s.firstName} {s.lastName}
@@ -284,9 +169,25 @@ const CreateEventCard: React.FC = () => {
               })}
             </div>
           </div>
-        </>
+
+          <div className="pt-4 flex gap-3">
+            {isEditMode && (
+              <button 
+                type="button" onClick={handleDelete}
+                className="p-4 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            )}
+            <button type="submit" className="flex-1 btn-primary py-4">
+              {isEditMode ? "Update Event" : "Publish Event"}
+            </button>
+          </div>
+        </form>
       )}
-    </BaseCreateCard>
+    </Modal>
   );
 };
 

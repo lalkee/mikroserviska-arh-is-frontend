@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Outlet, useLocation } from 'react-router-dom';
-import { Client } from '@stomp/stompjs';
+// Import the service instead of the Stomp Client
+import { eventService } from '../services/eventService';
 import type { Event, Speaker, Location as AppLocation } from '../types/index';
 import Modal from '../components/Modal';
 import EventCard from '../components/cards/EventCard';
@@ -13,30 +14,23 @@ const EventsPage: React.FC = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Modal State
   const [selectedSpeaker, setSelectedSpeaker] = useState<Speaker | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<AppLocation | null>(null);
 
   useEffect(() => {
-    const client = new Client({
-      brokerURL: 'ws://localhost:15674/ws',
-      connectHeaders: { login: 'guest', passcode: 'guest' },
-      onConnect: () => {
-        // Subscribe to the response queue
-        client.subscribe('/queue/event.get.all.res', (message) => {
-          setEvents(JSON.parse(message.body));
-          setLoading(false);
-        });
-
-        // Request all events
-        client.publish({ destination: '/queue/event.get.all', body: JSON.stringify({}) });
-      },
+    // Activate the service and fetch data once connected
+    eventService.activate(() => {
+      eventService.fetchAll((data) => {
+        setEvents(data);
+        setLoading(false);
+      });
     });
 
-    client.activate();
-    return () => { client.deactivate(); };
+    // Cleanup: deactivate the connection when the component unmounts
+    return () => {
+      eventService.deactivate();
+    };
   }, [locationPath.pathname]);
-
 
   return (
     <div>

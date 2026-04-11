@@ -1,32 +1,24 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, Outlet, useLocation } from 'react-router-dom';
-import { Client } from '@stomp/stompjs'; // Added
+import { useNavigate, Outlet } from 'react-router-dom';
+import { locationService } from '../services/locationService';
 import type { Location } from '../types/index';
 import LocationCard from '../components/cards/LocationCard';
 
 const LocationsPage: React.FC = () => {
   const navigate = useNavigate();
-  const locationPath = useLocation();
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const client = new Client({
-      brokerURL: 'ws://localhost:15674/ws',
-      connectHeaders: { login: 'guest', passcode: 'guest' },
-      onConnect: () => {
-        client.subscribe('/queue/location.get.all.res', (message) => {
-          setLocations(JSON.parse(message.body));
-          setLoading(false);
-        });
-
-        client.publish({ destination: '/queue/location.get.all', body: JSON.stringify({}) });
-      },
+    locationService.activate(() => {
+      locationService.fetchAll((data: Location[]) => {
+        setLocations(data);
+        setLoading(false);
+      });
     });
 
-    client.activate();
-    return () => { client.deactivate(); };
-  }, [locationPath.pathname]);
+    return () => locationService.deactivate();
+  }, []);
 
   return (
     <div>
