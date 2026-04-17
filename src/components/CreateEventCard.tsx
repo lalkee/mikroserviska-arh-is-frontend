@@ -52,9 +52,22 @@ const CreateEventCard: React.FC = () => {
     e.preventDefault();
     if (!eventService.isConnected) return;
 
-    const payload = isEditMode ? { ...formData, id: Number(id) } : formData;
-    eventService.save(payload as Event);
-    navigate('/events');
+    const payload = {
+      name: formData.name,
+      agenda: formData.agenda,
+      dateTime: formData.dateTime,
+      duration: formData.duration,
+      registrationFee: formData.registrationFee,
+      locationId: formData.location?.id,
+      speakerIds: formData.speakers?.map(s => s.id) || [],
+      ...(isEditMode && { id: Number(id) }) 
+    };
+
+    // CHANGED: Now passing a callback to navigate ONLY after the 
+    // backend confirms the save/participation sync is complete.
+    eventService.save(payload as any, () => {
+      navigate('/events');
+    });
   };
 
   const handleDelete = () => {

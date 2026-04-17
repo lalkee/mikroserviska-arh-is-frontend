@@ -1,6 +1,6 @@
 import { type IMessage } from '@stomp/stompjs';
 import { sharedClient } from './stompClient';
-import type { Event } from '../types/index';
+import type { Event, Speaker } from '../types/index';
 
 class EventService {
   private client = sharedClient;
@@ -35,18 +35,33 @@ class EventService {
   }
 
   fetchAll(callback: (data: Event[]) => void) {
-    this.requestResponse('event.get.all', 'event.get.all.res', {}, callback);
+    this.requestResponse('event.get.all', 'event.get.all.res', {}, (events: Event[]) => {
+      if (!events || events.length === 0) {
+        callback([]);
+        return;
+      }
+
+      const eventIds = events.map(e => e.id).filter((id): id is number => id !== undefined);
+
+      this.requestResponse('speaker.get.byEventIds', 'speaker.get.byEventIds.res', eventIds, (speakerGroups: Speaker[][]) => {
+        events.forEach((event, index) => {
+          event.speakers = speakerGroups[index] || [];
+        });
+        callback(events);
+      });
+    });
   }
 
   fetchById(id: number, callback: (data: Event) => void) {
     this.requestResponse('event.get.id', 'event.get.id.res', id, callback);
   }
 
-  save(event: Event) {
-    this.client.publish({
-      destination: 'event.save',
-      headers: { 'correlation-id': crypto.randomUUID() },
-      body: JSON.stringify(event),
+  // CHANGED: Added callback and switched to requestResponse
+  // This ensures the backend has finished the 'participation.save' transaction
+  // before the frontend considers the action successful.
+  save(event: any, callback: (data: any) => void) {
+    this.requestResponse('event.save', 'event.save.res', event, (data) => {
+      callback(data);
     });
   }
 

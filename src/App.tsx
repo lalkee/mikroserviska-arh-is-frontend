@@ -6,7 +6,6 @@ import SpeakersPage from './pages/SpeakersPage';
 import CreateLocationCard from './components/CreateLocationCard';
 import CreateSpeakerCard from './components/CreateSpeakerCard';
 import CreateEventCard from './components/CreateEventCard';
-import MQTestPage from './pages/MQTestPage';
 
 function App() {
   return (
@@ -32,7 +31,6 @@ function App() {
         </Route>
 
 
-        <Route path="test" element={<MQTestPage />}/>
       </Routes>
     </BrowserRouter>
   );

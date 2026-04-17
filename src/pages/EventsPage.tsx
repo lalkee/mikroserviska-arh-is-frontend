@@ -18,7 +18,6 @@ const EventsPage: React.FC = () => {
   const [selectedLocation, setSelectedLocation] = useState<AppLocation | null>(null);
 
   useEffect(() => {
-    // Activate the service and fetch data once connected
     eventService.activate(() => {
       eventService.fetchAll((data) => {
         setEvents(data);
@@ -26,7 +25,6 @@ const EventsPage: React.FC = () => {
       });
     });
 
-    // Cleanup: deactivate the connection when the component unmounts
     return () => {
       eventService.deactivate();
     };
