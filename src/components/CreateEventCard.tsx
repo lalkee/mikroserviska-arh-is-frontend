@@ -63,8 +63,6 @@ const CreateEventCard: React.FC = () => {
       ...(isEditMode && { id: Number(id) }) 
     };
 
-    // CHANGED: Now passing a callback to navigate ONLY after the 
-    // backend confirms the save/participation sync is complete.
     eventService.save(payload as any, () => {
       navigate('/events');
     });
