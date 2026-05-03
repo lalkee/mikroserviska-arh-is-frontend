@@ -56,9 +56,7 @@ class EventService {
     this.requestResponse('event.get.id', 'event.get.id.res', id, callback);
   }
 
-  // CHANGED: Added callback and switched to requestResponse
-  // This ensures the backend has finished the 'participation.save' transaction
-  // before the frontend considers the action successful.
+  // uses request-response pattern so it waits until update is finnished before updating ui
   save(event: any, callback: (data: any) => void) {
     this.requestResponse('event.save', 'event.save.res', event, (data) => {
       callback(data);
