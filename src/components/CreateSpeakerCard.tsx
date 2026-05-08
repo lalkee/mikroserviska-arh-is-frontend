@@ -39,10 +39,19 @@ const CreateSpeakerCard: React.FC = () => {
   };
 
   const handleDelete = () => {
-    if (window.confirm('Are you sure?') && speakerService.isConnected) {
-      speakerService.deleteSpeaker(Number(id));
-      navigate('/speakers');
-    }
+    if (!id || !speakerService.isConnected) return;
+
+    speakerService.checkParticipation(Number(id), (hasParticipations: boolean) => {
+      
+      const message = hasParticipations 
+        ? "This speaker is currently assigned to events. Deleting them will remove them from those events. Are you sure?"
+        : "Are you sure you want to delete this speaker?";
+
+      if (window.confirm(message)) {
+        speakerService.deleteSpeaker(Number(id));
+        navigate('/speakers');
+      }
+    });
   };
 
   return (
