@@ -58,6 +58,17 @@ class SpeakerService {
     });
   }
 
+  //checks if speaker has any participations. takes speaker id
+  checkParticipation(id: number, callback: (hasParticipations: boolean) => void) {
+    this.requestResponse(
+      'participation.check', 
+      'participation.check.res', 
+      id, 
+      callback
+    );
+  }
+  
+
   get isConnected() {
     return this.client.connected;
   }
