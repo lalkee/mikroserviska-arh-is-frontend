@@ -24,18 +24,24 @@ const CreateEventCard: React.FC = () => {
   const [locations, setLocations] = useState<Location[]>([]);
   const [speakers, setSpeakers] = useState<Speaker[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     eventService.activate(() => {
-      locationService.fetchAll((locs) => setLocations(locs));
-      speakerService.fetchAll((spks) => setSpeakers(spks));
+      // Fetch support data
+      locationService.fetchAll((locs) => setLocations(locs || []));
+      speakerService.fetchAll((spks) => setSpeakers(spks || []));
 
       if (isEditMode && id) {
-        eventService.fetchById(Number(id), (data: Event) => {
-          if (data.dateTime) {
-            data.dateTime = data.dateTime.slice(0, 16);
+        eventService.fetchById(Number(id), (data, err) => {
+          if (err) {
+            setError(err);
+          } else if (data) {
+            if (data.dateTime) {
+              data.dateTime = data.dateTime.slice(0, 16);
+            }
+            setFormData(data);
           }
-          setFormData(data);
           setLoading(false);
         });
       } else {
@@ -63,8 +69,12 @@ const CreateEventCard: React.FC = () => {
       ...(isEditMode && { id: Number(id) }) 
     };
 
-    eventService.save(payload as any, () => {
-      navigate('/events');
+    eventService.save(payload as any, (_, err) => {
+      if (err) {
+        setError(err);
+      } else {
+        navigate('/events');
+      }
     });
   };
 
@@ -95,13 +105,23 @@ const CreateEventCard: React.FC = () => {
     >
       {loading ? (
         <div className="text-center py-10 text-neutral-400">Loading...</div>
+      ) : error ? (
+        <div className="text-center py-10">
+          <div className="text-red-500 font-medium mb-4">Error: {error}</div>
+          <button 
+            onClick={() => navigate('/events')}
+            className="text-sm text-neutral-500 underline"
+          >
+            Back to Events
+          </button>
+        </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label className="block text-xs font-bold uppercase text-neutral-500 mb-2 tracking-widest">Event Name</label>
             <input 
               type="text" required className="input-field py-3 px-4" 
-              value={formData.name}
+              value={formData?.name || ''}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             />
           </div>
@@ -110,7 +130,7 @@ const CreateEventCard: React.FC = () => {
             <label className="block text-xs font-bold uppercase text-neutral-500 mb-2 tracking-widest">Agenda</label>
             <textarea 
               required className="input-field min-h-25 py-3 px-4" 
-              value={formData.agenda}
+              value={formData?.agenda || ''}
               onChange={(e) => setFormData({ ...formData, agenda: e.target.value })}
             />
           </div>
@@ -120,7 +140,7 @@ const CreateEventCard: React.FC = () => {
               <label className="block text-xs font-bold uppercase text-neutral-500 mb-2 tracking-widest">Date</label>
               <input 
                 type="datetime-local" required className="input-field py-3 px-4" 
-                value={formData.dateTime}
+                value={formData?.dateTime || ''}
                 onChange={(e) => setFormData({ ...formData, dateTime: e.target.value })}
               />
             </div>
@@ -128,7 +148,7 @@ const CreateEventCard: React.FC = () => {
               <label className="block text-xs font-bold uppercase text-neutral-500 mb-2 tracking-widest">Duration</label>
               <input 
                 type="text" required className="input-field py-3 px-4" 
-                value={formData.duration}
+                value={formData?.duration || ''}
                 onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
               />
             </div>
@@ -139,15 +159,15 @@ const CreateEventCard: React.FC = () => {
               <label className="block text-xs font-bold uppercase text-neutral-500 mb-2 tracking-widest">Fee</label>
               <input 
                 type="number" required className="input-field py-3 px-4" 
-                value={formData.registrationFee}
-                onChange={(e) => setFormData({ ...formData, registrationFee: parseFloat(e.target.value) })}
+                value={formData?.registrationFee || 0}
+                onChange={(e) => setFormData({ ...formData, registrationFee: parseFloat(e.target.value) || 0 })}
               />
             </div>
             <div>
               <label className="block text-xs font-bold uppercase text-neutral-500 mb-2 tracking-widest">Location</label>
               <select 
                 required className="input-field py-3 px-4"
-                value={formData.location?.id || ''}
+                value={formData?.location?.id || ''}
                 onChange={(e) => setFormData({
                   ...formData,
                   location: locations.find(l => l.id === parseInt(e.target.value))
@@ -165,7 +185,7 @@ const CreateEventCard: React.FC = () => {
             <label className="block text-xs font-bold uppercase text-neutral-500 mb-3 tracking-widest">Speakers</label>
             <div className="flex flex-wrap gap-3">
               {speakers.map(s => {
-                const isSelected = formData.speakers?.some(sel => sel.id === s.id);
+                const isSelected = formData?.speakers?.some(sel => sel.id === s.id);
                 return (
                   <button
                     key={s.id} type="button"

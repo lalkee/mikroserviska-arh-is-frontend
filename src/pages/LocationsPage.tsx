@@ -8,11 +8,16 @@ const LocationsPage: React.FC = () => {
   const navigate = useNavigate();
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     locationService.activate(() => {
-      locationService.fetchAll((data: Location[]) => {
-        setLocations(data);
+      locationService.fetchAll((data, err) => {
+        if (err) {
+          setError(err);
+        } else if (data) {
+          setLocations(data);
+        }
         setLoading(false);
       });
     });
@@ -28,8 +33,13 @@ const LocationsPage: React.FC = () => {
           Add Location
         </button>
       </div>
+
       {loading ? (
         <div className="text-center py-20 text-neutral-400">Loading...</div>
+      ) : error ? (
+        <div className="text-center py-20 text-red-500 font-medium">
+          Error: {error}
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {locations.map((loc) => (

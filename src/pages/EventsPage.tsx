@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Outlet, useLocation } from 'react-router-dom';
-// Import the service instead of the Stomp Client
 import { eventService } from '../services/eventService';
 import type { Event, Speaker, Location as AppLocation } from '../types/index';
 import Modal from '../components/Modal';
@@ -13,14 +12,19 @@ const EventsPage: React.FC = () => {
   const locationPath = useLocation();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [selectedSpeaker, setSelectedSpeaker] = useState<Speaker | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<AppLocation | null>(null);
 
   useEffect(() => {
     eventService.activate(() => {
-      eventService.fetchAll((data) => {
-        setEvents(data);
+      eventService.fetchAll((data, err) => {
+        if (err) {
+          setError(err);
+        } else if (data) {
+          setEvents(data);
+        }
         setLoading(false);
       });
     });
@@ -41,6 +45,10 @@ const EventsPage: React.FC = () => {
 
       {loading ? (
         <div className="text-center py-20 text-neutral-400">Loading...</div>
+      ) : error ? (
+        <div className="text-center py-20 text-red-500 font-medium">
+          Error: {error}
+        </div>
       ) : events.length === 0 ? (
         <div className="text-center py-20 border border-dashed border-[#eaeaea] rounded-xl text-neutral-400">
           No events scheduled.

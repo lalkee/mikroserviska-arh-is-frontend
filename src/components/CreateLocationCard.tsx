@@ -11,12 +11,17 @@ const CreateLocationCard: React.FC = () => {
 
   const [formData, setFormData] = useState<Location>({ name: '', address: '', capacity: 0 });
   const [loading, setLoading] = useState(isEditMode);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     locationService.activate(() => {
       if (isEditMode && id) {
-        locationService.fetchById(Number(id), (data: Location) => {
-          setFormData(data);
+        locationService.fetchById(Number(id), (data: Location | null, err?: string) => {
+          if (err) {
+            setError(err);
+          } else if (data) {
+            setFormData(data);
+          }
           setLoading(false);
         });
       }
@@ -29,8 +34,15 @@ const CreateLocationCard: React.FC = () => {
     e.preventDefault();
     if (!locationService.isConnected) return;
 
-    locationService.save(isEditMode ? { ...formData, id: Number(id) } : formData);
-    navigate('/locations');
+    const payload = isEditMode ? { ...formData, id: Number(id) } : formData;
+
+    locationService.save(payload, (_: any, err?: string) => {
+      if (err) {
+        setError(err);
+      } else {
+        navigate('/locations');
+      }
+    });
   };
 
   const handleDelete = () => {
@@ -48,6 +60,16 @@ const CreateLocationCard: React.FC = () => {
     >
       {loading ? (
         <div className="text-center py-10 text-neutral-400">Loading...</div>
+      ) : error ? (
+        <div className="text-center py-10">
+          <div className="text-red-500 font-medium mb-4">Error: {error}</div>
+          <button 
+            onClick={() => navigate('/locations')}
+            className="text-sm text-neutral-500 underline"
+          >
+            Back to Locations
+          </button>
+        </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
@@ -55,7 +77,7 @@ const CreateLocationCard: React.FC = () => {
             <input 
               type="text" required className="input-field py-3 px-4 text-base" 
               placeholder="e.g. Grand Ballroom"
-              value={formData.name}
+              value={formData?.name || ''}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             />
           </div>
@@ -65,7 +87,7 @@ const CreateLocationCard: React.FC = () => {
             <input 
               type="text" required className="input-field py-3 px-4 text-base" 
               placeholder="e.g. 123 University St"
-              value={formData.address}
+              value={formData?.address || ''}
               onChange={(e) => setFormData({ ...formData, address: e.target.value })}
             />
           </div>
@@ -75,7 +97,7 @@ const CreateLocationCard: React.FC = () => {
             <input 
               type="number" required className="input-field py-3 px-4 text-base" 
               placeholder="e.g. 200"
-              value={formData.capacity}
+              value={formData?.capacity || 0}
               onChange={(e) => setFormData({ ...formData, capacity: parseInt(e.target.value) || 0 })}
             />
           </div>

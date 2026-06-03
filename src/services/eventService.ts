@@ -1,6 +1,6 @@
 import { type IMessage } from '@stomp/stompjs';
 import { sharedClient } from './stompClient';
-import type { Event, Speaker } from '../types/index';
+import type { Event } from '../types/index';
 
 class EventService {
   private client = sharedClient;
@@ -14,12 +14,19 @@ class EventService {
     this.client.deactivate();
   }
 
-  private requestResponse(destination: string, replyTo: string, body: any, callback: (data: any) => void) {
+  private requestResponse(destination: string, replyTo: string, body: any, callback: (data: any, error?: string) => void) {
     const correlationId = crypto.randomUUID();
 
     const subscription = this.client.subscribe(replyTo, (message: IMessage) => {
       if (message.headers['correlation-id'] === correlationId) {
-        callback(JSON.parse(message.body));
+        const data = JSON.parse(message.body);
+        
+        if (data && data.error) {
+          callback(null, data.error);
+        } else {
+          callback(data);
+        }
+        
         subscription.unsubscribe();
       }
     });
@@ -34,33 +41,16 @@ class EventService {
     });
   }
 
-  fetchAll(callback: (data: Event[]) => void) {
-    this.requestResponse('event.get.all', 'event.get.all.res', {}, (events: Event[]) => {
-      if (!events || events.length === 0) {
-        callback([]);
-        return;
-      }
-
-      const eventIds = events.map(e => e.id).filter((id): id is number => id !== undefined);
-
-      this.requestResponse('speaker.get.byEventIds', 'speaker.get.byEventIds.res', eventIds, (speakerGroups: Speaker[][]) => {
-        events.forEach((event, index) => {
-          event.speakers = speakerGroups[index] || [];
-        });
-        callback(events);
-      });
-    });
+  fetchAll(callback: (data: Event[] | null, error?: string) => void) {
+    this.requestResponse('event.get.all', 'event.get.all.res', {}, callback);
   }
 
-  fetchById(id: number, callback: (data: Event) => void) {
+  fetchById(id: number, callback: (data: Event | null, error?: string) => void) {
     this.requestResponse('event.get.id', 'event.get.id.res', id, callback);
   }
 
-  // uses request-response pattern so it waits until update is finnished before updating ui
-  save(event: any, callback: (data: any) => void) {
-    this.requestResponse('event.save', 'event.save.res', event, (data) => {
-      callback(data);
-    });
+  save(event: any, callback: (data: any, error?: string) => void) {
+    this.requestResponse('event.save', 'event.save.res', event, callback);
   }
 
   deleteEvent(id: number) {
